@@ -1,0 +1,201 @@
+<html>
+
+<script>
+    var ColumnsEnum = {"title":1, "price":2, "pref":3, "desc": 4}
+
+    var searchResults=[];
+    var searchCategory="";
+    var rootUrl="http://localhost/";
+
+    function clear()
+    {
+        searchResults = []
+        searchCategory = "";
+        populateResultsTable();
+    }
+
+    function search(category, filter)
+    {
+        console.log("search() category: " + category + " filter: " + filter );
+        clear();
+        searchCategory = category;
+
+        var xmlhttp = new XMLHttpRequest();
+        xmlhttp.onreadystatechange = function()
+        {
+            //console.log("state: " + xmlhttp.readyState + " status: " + xmlhttp.status);
+            if (xmlhttp.readyState == 4 && xmlhttp.status == 200 )
+            {
+                var resultFields = JSON.parse( xmlhttp.responseText );
+                
+                for ( var i = 0; i < resultFields.length; ++i )
+                {
+                    var product = resultFields[i];
+                    var title = product.title;
+                    var desc  = product.description;
+                    if ( title.toLowerCase().indexOf( filter.toLowerCase() ) !== -1 /*|| desc.indexOf( filter ) !== -1*/ )
+                    {   
+                        //console.log("found, title: " + title + " desc: " + desc);
+                        searchResults.push(product);
+                    }
+                }
+                populateResultsTable();
+            }
+        }
+        xmlhttp.open("GET", rootUrl+category, true);
+        xmlhttp.send();
+    }
+
+    function onSearchButtonPressed()
+    {        
+        var categoryValue = document.getElementById("categoryCombobox").value;
+        var searchFilter = document.getElementById("searchFilterEdit").value;
+        search(categoryValue, searchFilter);
+    }
+
+    function onImgLoadError(evt)
+    {
+        console.log("image load error, src:" + evt.target.src);
+        evt.target.onerror = "";
+        evt.target.src = rootUrl+"/images/" + searchCategory + "/thumb/no-image.png";
+        return true;
+    }
+
+    function onSort(sortColumn)
+    {
+        console.log("sort by column index:" + sortColumn);
+        searchResults.sort( function(a,b)
+        {
+            var lhs=undefined;
+            var rhs=undefined;
+            var result=0;
+
+            if ( sortColumn == ColumnsEnum.price )
+            {
+                lhs = parseInt(a["price-range"]);
+                rhs = parseInt(b["price-range"]);
+            }
+            else if ( sortColumn == ColumnsEnum.pref )
+            {
+                lhs = parseInt(a.preferability);
+                rhs = parseInt(b.preferability);
+            }
+            else
+            {
+                lhs = a.title;
+                rhs = b.title;
+            }
+
+            if ( lhs === rhs ) result=0;
+            else if ( lhs <  rhs ) result=-1;
+            else if ( lhs >  rhs ) result=1;
+            //console.log("lhs: " + lhs + " rhs: " + rhs + " result: " + result );
+            return result;
+        });
+
+        populateResultsTable();
+    }
+
+    function onClickImage(evt)
+    {
+        window.open(evt.target.src, '_blank');
+    }
+
+    function populateResultsTable()
+    {
+        //console.log("results: " + searchResults.length )
+        oldTableBody=document.getElementsByTagName("tbody").item(0);
+        var newTableBody = document.createElement('tbody');
+        oldTableBody.parentNode.replaceChild(newTableBody, oldTableBody)
+
+        for ( var i = 0; i < searchResults.length; ++i )
+        {
+            var product = searchResults[i];
+            //console.log("title: " +product.title);
+            var row = document.createElement("tr");
+            var cellImage = document.createElement("td");
+            var cellTitle = document.createElement("td");
+            var cellPrice = document.createElement("td");
+            var cellPref = document.createElement("td");
+            var cellDesc = document.createElement("td");
+
+            var images=[]
+            for ( var j=0; j<product.images.length; ++j )
+            {
+                var image=product.images[j];
+                if ( image.length>0 )
+                {
+                    images.push(image);
+                }
+            }
+
+            if ( images.length === 0 )
+            {
+                var img = new Image();
+                img.src = rootUrl+"/images/" + searchCategory + "/thumb/no-image.png";
+                img.style="max-width:50;max-height:50";
+                cellImage.appendChild(img);
+                //console.log(img.src);
+            }
+            else
+            {
+                for ( var j=0; j<images.length; ++j )
+                {
+                    var imageName = images[j];
+                    var imgElement = new Image();
+                    imgElement.src = rootUrl+"images/" + searchCategory + "/thumb/"+imageName;
+                    imgElement.style = "max-width:50;max-height:50";
+                    imgElement.addEventListener('error', onImgLoadError, false);
+                    imgElement.addEventListener('click', onClickImage, false);
+                    cellImage.appendChild(imgElement);
+                    //console.log(imgElement.src);
+                }
+            }
+
+            var preferability="";
+            for (var j=0;j<product.preferability/10; ++j)
+            {
+                preferability += "*";
+            }
+
+            var price="";
+            for (var j=0;j<product["price-range"]/10;++j)
+            {
+                price += "\u20AC";
+            }
+
+            cellTitle.appendChild( document.createTextNode(product.title) );
+            cellPrice.appendChild( document.createTextNode(price) );
+            cellPref.appendChild( document.createTextNode(preferability) );
+            cellDesc.appendChild( document.createTextNode(product.description) );
+
+            row.appendChild(cellImage);
+            row.appendChild(cellTitle);
+            row.appendChild(cellPrice);
+            row.appendChild(cellPref);
+            row.appendChild(cellDesc);
+
+            newTableBody.appendChild(row);
+        }
+    }
+</script>
+
+<div id="searchContainer">
+    <select id="categoryCombobox">
+        <option value="beers">Beers</option>
+        <option value="energy-drinks">Energy drinks</option>
+    </select>
+    <input type="text" id="searchFilterEdit">
+    <button type="button" onclick="onSearchButtonPressed(this);">Search</button>
+</div>
+
+<div>
+    <table id="resultsTable">
+        <thead>
+            <tr><th/><th onclick="onSort(ColumnsEnum.title);">Title</th><th onclick="onSort(ColumnsEnum.price);">Price range</th><th onclick="onSort(ColumnsEnum.pref);">Preferability</th><th>Description</th></tr>
+        </thead>
+        <tbody/>
+    </table>
+</div>
+
+</html>
